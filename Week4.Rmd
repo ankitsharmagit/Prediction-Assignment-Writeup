@@ -1,0 +1,119 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Ankit Sharma"
+date: "July 10, 2019"
+output: html_document
+---
+##Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+##Importing Library
+```{r}
+library(caret)
+library(ggplot2)
+library(rpart)
+library(randomForest)
+```
+
+##Importing Dataset
+```{r}
+train=read.csv("pml-training.csv")
+test=read.csv("pml-testing.csv")
+dim(train)
+table(train$classe)
+```
+
+The training data has 19622 observations and 160 features, and the distribution of the five measured stances A,B,C,D,E is
+
+##Removing missing data
+```{r}
+#Remove column with all missing values
+training_set=train[,(colSums(is.na(train))==0)]
+testing_set=test[,(colSums(is.na(train))==0)]
+
+nzv<-nearZeroVar(training_set,saveMetrics = TRUE)
+training_set= training_set[,nzv$nzv=="FALSE"]
+nzv<-nearZeroVar(testing_set,saveMetrics = TRUE)
+testing_set= testing_set[,nzv$nzv=="FALSE"]
+
+
+# Delete variables are irrelevant to our current project: user_name, raw_timestamp_part_1, raw_timestamp_part_,2 cvtd_timestamp, new_window, and  num_window (columns 1 to 7). 
+training_set   <-training_set[,-c(1:7)]
+testing_set <-testing_set[,-c(1:7)]
+```
+
+##Cross-validation
+we split the cleaned training set into a pure training data set (70%) and a validation data set (30%). We will use the validation data set to conduct cross validation in future steps
+```{r}
+intrain=createDataPartition(training_set$classe,p=.70,list = FALSE)
+
+trainingdata=training_set[intrain,]
+validationdata=training_set[-intrain,]
+
+```
+
+##Visualization
+The variable "classe" contains 5 levels: A, B, C, D and E. A plot of the outcome variable will allow us to see the frequency of each levels in the TrainTrainingSet data set and # compare one another.
+```{r}
+plot(trainingdata$classe,col="red",main="Plot of levels of variable classe within the trainingdata set", xlab="classe", ylab="Frequency")
+```
+
+Based on the graph above, we can see that each level frequency is within the same order of magnitude of each other. Level A is the most frequent while level D is the least frequent.
+
+#Prediction model 1: Decision Tree 
+
+```{r}
+set.seed(12345)
+dtModel <- train(classe ~., method = "rpart", data = trainingdata)
+```
+
+```{r}
+Prediction_dt<-predict(dtModel,newdata = validationdata)
+# Test results on our subTesting data set:
+confusionMatrix(Prediction_dt,validationdata$classe)
+```
+
+
+
+#Prediction model 2: Random Forest
+```{r}
+set.seed(12345)
+rfModel <- randomForest(trainingdata[,-52],trainingdata$classe,ntree = 512)
+
+```
+
+```{r}
+Prediction_rf<-predict(rfModel,newdata = validationdata)
+# Test results on our subTesting data set:
+confusionMatrix(Prediction_rf,validationdata$classe)
+```
+As expected, Random Forest algorithm with accuracy 99.3 % performed better than Decision Trees 
+#Submission
+```{r}
+# predict outcome levels on the original Testing data set using Random Forest algorithm
+predictfinal <- predict(rfModel, testing_set)
+predictfinal
+```
+```{r}
+# Write files for submission
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictfinal)
+```
+
